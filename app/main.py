@@ -2,6 +2,7 @@ import toga
 import requests
 import threading
 from const import *
+from toga.style.pack import COLUMN, Pack
 
 class PokeDex(toga.App):
 
@@ -14,14 +15,17 @@ class PokeDex(toga.App):
         toga.App.__init__(self, title, id)
         self.title = title
         self.size = (WIDTH, HEIGHT)
+        self.offset = 0
         
         # Aspectos de la tabla
         self.heading = ['Name']
         self.data = []
 
         # Llamada a los datos de la API
+        
         self.create_elemets()
         self.load_async_data()
+        self.validate_previous_command()
 
     def startup(self):
         """
@@ -32,14 +36,15 @@ class PokeDex(toga.App):
         self.main_window = toga.MainWindow(title=self.title,
                                             size=self.size)
         # contenedor
-        box = toga.Box()
+        box = toga.Box(style=Pack(direction=COLUMN, padding_top=50))
         
         # divisor de contenedor
         split = toga.SplitContainer()
         split.content = [self.table, box]
-
+        
         self.main_window.content = split
         self.main_window.toolbar.add(self.previous_command, self.next_command)
+        # self.commands.add(self.previous_command, self.next_command)
         self.main_window.show()
 
     def create_elemets(self):
@@ -55,20 +60,20 @@ class PokeDex(toga.App):
         """
         self.create_previous_command()
         self.create_next_command()
-
+    
     def create_next_command(self):
-        """
+        """ 
         Comando para navegar hacia adelante
         """
         self.next_command = toga.Command(self.next, label='Next', 
-                                         tooltip='Next', icon=str(BULBASAUR_ICON))
+                                         tooltip='Next', icon=BULBASAUR_ICON)
 
     def create_previous_command(self):
         """
         Comando para navegar hacia atras
         """
         self.previous_command = toga.Command(self.previous, label='Previous', 
-                                             tooltip='Previous', icon=str(METAPOD_ICON))
+                                             tooltip='Previous', icon=METAPOD_ICON)
 
     def create_table(self):
         """
@@ -83,16 +88,37 @@ class PokeDex(toga.App):
         thread = threading.Thread(target=self.load_data)
         thread.start()
 
+    def load_async_pokemon(self, pokemon):
+        thread = threading.Thread(target=self.load_pokemon, args=[pokemon])
+        thread.start()
+
+    def load_pokemon(self, pokemon):
+        path = f'https://pokeapi.co/api/v2/pokemon/{pokemon}/'
+
+        response = requests.get(path)
+        if response:
+            result =  response.json()
+            name = result['forms'][0]['name']
+            abilities = [ability['ability']['name'] 
+                         for ability in result['abilities']]
+            sprite = result['sprites']['front_default']
+
+            print(name)
+            print(abilities)
+            print(sprite)
+
+
     def load_data(self):
         """
         Cargar los datos de la PokeAPI
         """
-
+        self.data.clear()
         # Endpoint de la API
-        path = 'https://pokeapi.co/api/v2/pokemon-form?offset=0&limit=20'
+        path = f'https://pokeapi.co/api/v2/pokemon-form?offset={self.offset}&limit=20'
 
         # obtener datos de la API
-        if response:= requests.get(path):
+        response =  requests.get(path)
+        if response: 
             
             # Convertir la respuesta a ditc
             result = response.json()
@@ -107,16 +133,41 @@ class PokeDex(toga.App):
 
     def select_element(self, widget, row):
         """
-        Callback ... 
+        Callback para obtener la informacion de un determinado
+        pokemon.
         """
         if row:
-            print(row.name)
+            self.load_async_pokemon(row.name)
 
     def next(self, widget):
-        print("Next")
+        """
+        """
+        self.offset += 1
+        self.load_async_data()
+        self.handler_command(widget)
 
     def previous(self, widget):
-        print("Previous")
+        """
+        Comando para obtener una pagina previa
+        """
+        self.offset -= 1
+        self.handler_command(widget)
+
+    def handler_command(self, widget):
+        """
+        Comando para obtener una pagina posterior
+        """
+        widget.enable = False
+        self.load_async_data()
+        widget.enabled = True
+        self.validate_previous_command()
+
+    def validate_previous_command(self):
+        """
+        Funcion para validar que offset no sea menor a 0
+        inhabilitando previous_command.
+        """
+        self.previous_command.enabled = not (self.offset == 0)
 
 if __name__ == "__main__":
     pokedex = PokeDex('PokeDex', 'com.example.Pokedex')
