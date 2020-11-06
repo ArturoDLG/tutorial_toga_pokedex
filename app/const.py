@@ -2,8 +2,8 @@ import pathlib
 import os
 
 # Dimensiones
-WIDTH = 600
-HEIGHT = 500
+WIDTH = 700
+HEIGHT = 700
 
 # Archivos
 """

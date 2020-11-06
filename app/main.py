@@ -2,7 +2,7 @@ import toga
 import requests
 import threading
 from const import *
-from toga.style.pack import COLUMN, Pack
+from toga.style.pack import *
 
 class PokeDex(toga.App):
 
@@ -15,7 +15,13 @@ class PokeDex(toga.App):
         toga.App.__init__(self, title, id)
         self.title = title
         self.size = (WIDTH, HEIGHT)
+        
         self.offset = 0
+
+        self.response_name = ''
+        self.response_description = ''
+        self.response_sprite = ''
+
         
         # Aspectos de la tabla
         self.heading = ['Name']
@@ -36,11 +42,14 @@ class PokeDex(toga.App):
         self.main_window = toga.MainWindow(title=self.title,
                                             size=self.size)
         # contenedor
-        box = toga.Box(style=Pack(direction=COLUMN, padding_top=50))
+        information_area = toga.Box(
+            children=[self.image_view, self.pokemon_name, self.pokemon_description],
+            style=Pack(direction=COLUMN)
+        )
         
         # divisor de contenedor
         split = toga.SplitContainer()
-        split.content = [self.table, box]
+        split.content = [self.table, information_area]
         
         self.main_window.content = split
         self.main_window.toolbar.add(self.previous_command, self.next_command)
@@ -53,6 +62,8 @@ class PokeDex(toga.App):
         """
         self.create_table()
         self.create_toolbar()
+        self.create_image(PIDGEY_ICON)
+        self.create_labels()
 
     def create_toolbar(self):
         """
@@ -80,39 +91,70 @@ class PokeDex(toga.App):
         Crear la tabla para visualizar los pokemones 
         """
         self.table = toga.Table(self.heading, data=self.data, on_select=self.select_element)
+
+    def create_image(self, path, width=200, height=200):
+        """
+        Crear un ImageView para desplegar la imagen
+        """
+        image = toga.Image(path)
+        style = Pack(width=width, height=height)
+        self.image_view = toga.ImageView(image, style=style)
+
+    def create_labels(self):
+        self.pokemon_name = toga.Label('Name')
+        self.pokemon_name.style.font_size = 20
+        self.pokemon_name.style.padding_bottom = 10
+        self.pokemon_description = toga.Label('Description')
     
     def load_async_data(self):
         """
         Cargar datos de forma asincrona
         """
+        self.data.clear()
+        self.table.data = self.data
+        self.image_view.image = PIDGEY_ICON # None
+        self.pokemon_name.text = 'Loading...'
+        self.pokemon_description.text = ''
         thread = threading.Thread(target=self.load_data)
         thread.start()
+        thread.join()
+        self.table.data = self.data
+        self.pokemon_name.text = 'Name'
+
 
     def load_async_pokemon(self, pokemon):
+        """
+        Obtener los datos de forma asincrona
+        """
         thread = threading.Thread(target=self.load_pokemon, args=[pokemon])
         thread.start()
+        thread.join()
+        self.image_view.image = toga.Image(self.response_sprite)
+        self.pokemon_name.text = self.response_name
+        self.pokemon_description.text = self.response_description
+        
 
     def load_pokemon(self, pokemon):
+        """
+        Obtener los datos de un Pokemon a traves
+        de la API.
+        """
         path = f'https://pokeapi.co/api/v2/pokemon/{pokemon}/'
 
         response = requests.get(path)
         if response:
             result =  response.json()
-            name = result['forms'][0]['name']
-            abilities = [ability['ability']['name'] 
-                         for ability in result['abilities']]
-            sprite = result['sprites']['front_default']
-
-            print(name)
-            print(abilities)
-            print(sprite)
+            self.response_name = result['forms'][0]['name']
+            abilities = (ability['ability']['name'] 
+                         for ability in result['abilities'])
+            self.response_description = '\n'.join(abilities)
+            self.response_sprite = result['sprites']['front_default']
 
 
     def load_data(self):
         """
         Cargar los datos de la PokeAPI
         """
-        self.data.clear()
         # Endpoint de la API
         path = f'https://pokeapi.co/api/v2/pokemon-form?offset={self.offset}&limit=20'
 
@@ -127,10 +169,7 @@ class PokeDex(toga.App):
                 name = pokemon['name']
                 self.data.append(name) 
 
-        self.table.data = self.data
-
     # Callback
-
     def select_element(self, widget, row):
         """
         Callback para obtener la informacion de un determinado
